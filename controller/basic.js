@@ -1,3 +1,4 @@
+const xlsx = require('xlsx');
 const app = require('../database/connect.js').app
 const firebase = require('../database/connect.js').fb
 
@@ -26,26 +27,7 @@ exports.getHistorySoil = async function(req, res){
     firebase.get(rootRef)
     .then((snapshot) => {
         if (snapshot.exists()) {
-           
-            const data = snapshot.val() 
-            const n = data.HISTORY.SOIL[id].n
-            const p = data.HISTORY.SOIL[id].p
-            const k = data.HISTORY.SOIL[id].k
-            const moist = data.HISTORY.SOIL[id].moist
-            const ph = data.HISTORY.SOIL[id].ph
-            let status =''
-            console.log(data.HISTORY.SOIL[id]) 
-            if(ph<=6 || moist<0.2 || k<=250 || p<200 || n<=150){
-                status = 'poor'
-            }else if(ph<7.5 || moist<0.6 || k<=400 || p<350 || n<=200){
-                status = 'moderate'
-            }else if(ph>=7.5 || moist<=0.8 || k>400 || p>350 || n>200){
-                status = 'good'
-            }
-
-
-
-            return res.json({ success: true, data: data.HISTORY.SOIL[id], stat: status})
+            return res.json({ success: true, data: data.HISTORY.SOIL[id]})
         } else {
             return res.json({ success: false, data: 'No data available.' })
         }
@@ -54,27 +36,96 @@ exports.getHistorySoil = async function(req, res){
         return res.json({ success: false, data: error })
     });
 }
-
-
-exports.masukin = async function(req, res){
-    // Add a new document with a generated ID
-    
-    data_fire={
-        '5ddf54e0bda94d4d9c1d0da2':{
-
+exports.getHistoryWeather = async function (req, res) {
+    const id = req.body.id;
+    console.log(req.body);
+    firebase
+      .get(rootRef)
+      .then((snapshot) => {
+        if (snapshot.exists()) {
+          const data = snapshot.val();
+          return res.json({
+            success: true,
+            data: data.HISTORY.WEATHER[id],
+          });
+        } else {
+          return res.json({ success: false, data: "No data available." });
         }
-    }
-    firebase.set(firebase.ref(database, 'SOIL/5dcba97c0a547e1d68c9a738'),{
-        long:'107.5615',
-        lat:'-6.82435',
-        mac_address:'3C:71:BF:2A:D7:9E',
-        jenis_iot : "Sensor_SOIL_002"
-    }).then(() => {
-        // Data saved successfully!
-        return res.json({ success: true, data: 'berhasil' })
       })
       .catch((error) => {
-        // The write failed...
-        return res.json({ success: false, data: error })
+        return res.json({ success: false, data: error });
       });
+  };
+exports.forecast = async function(req, res){
+
+    try {
+        const workbook = xlsx.readFile('./forecast_weather.xlsx')
+        const sheetName = workbook.SheetNames[0]
+        const worksheet = workbook.Sheets[sheetName]
+        const weather_forecast = xlsx.utils.sheet_to_json(worksheet)
+    
+        const today = new Date()
+        const week = new Date()
+        week.setDate(today.getDate() + 7);
+    
+        var data_forecast = weather_forecast.filter(row => {
+            const rowDate = new Date(row.year, row.month - 1, row.day)
+            return rowDate >= today && rowDate <= week
+          })
+        
+        var weather_type = data_forecast.map(row => row.weather_main)
+        const perday = week_to_days(weather_type);
+
+        return res.json({ success: true, data: perday})
+      
+    } catch (error) {
+        return res.json({ success: false, data: error })
+    }
 }
+
+const reshape = (array, rows, cols) => {
+    if (array.length !== rows * cols) {
+    throw new Error('Salah');
+    }
+
+    const reshaped = [];
+    for (let i = 0; i < rows; i++) {
+    reshaped.push(array.slice(i * cols, (i + 1) * cols));
+    }
+
+    return reshaped;
+};
+
+const count_data = (array) => {
+    const counts = {};
+    array.forEach(value => {
+    counts[value] = (counts[value] || 0) + 1;
+    });
+    return counts;
+};
+
+const mods = (counts) => {
+    return Object.keys(counts).reduce((a, b) => counts[a] > counts[b] ? a : b);
+};
+
+const week_to_days = (data) => {
+    const rows = 7;
+    const cols = 24;
+
+    const reshapedData = reshape(data, rows, cols);
+
+    const transformedData = new Array(rows).fill(0);
+
+    reshapedData.forEach((subarray, i) => {
+    const counts = count_data(subarray);
+
+    if (counts[2]) {
+        transformedData[i] = 2;
+    } else {
+        transformedData[i] = Number(mods(counts));
+    }
+    });
+
+    return transformedData;
+};
+  

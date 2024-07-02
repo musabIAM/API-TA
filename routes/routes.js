@@ -5,7 +5,8 @@ var basicControler = require('../controller/basic')
 
 router.get('/tampil_soil',basicControler.getSoil)
 router.post('/tampil_history_soil',basicControler.getHistorySoil)
-router.get('/fb',basicControler.masukin)
+router.get('/forecast',basicControler.forecast)
+router.post('/tampil_history_weather',basicControler.getHistoryWeather)
 
 module.exports = router;
 
